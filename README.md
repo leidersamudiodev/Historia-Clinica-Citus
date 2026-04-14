@@ -76,4 +76,4 @@ SELECT * FROM usuario WHERE documento_id > 0;
 
 ## Autor
 
-Leider Samudio - Jose Sierra
+Leider Samudio && Jose Sierra
