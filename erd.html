@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ERD — Historia Clínica Distribuida con Citus</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0d1117;color:#e6edf3;font-family:'Inter',sans-serif;overflow-x:auto}
+  header{
+    padding:18px 32px;background:#161b22;border-bottom:1px solid #30363d;
+    display:flex;align-items:center;gap:14px
+  }
+  .hicon{
+    width:42px;height:42px;border-radius:10px;display:flex;align-items:center;
+    justify-content:center;font-size:20px;flex-shrink:0;
+    background:linear-gradient(135deg,#1f6feb,#388bfd);
+    box-shadow:0 0 18px rgba(56,139,253,.35)
+  }
+  header h1{font-size:1.2rem;font-weight:700;color:#79c0ff}
+  header p{font-size:.78rem;color:#8b949e;margin-top:2px}
+  .legend{
+    display:flex;flex-wrap:wrap;gap:18px;align-items:center;
+    padding:10px 32px;background:#0d1117;border-bottom:1px solid #21262d
+  }
+  .li{display:flex;align-items:center;gap:8px;font-size:.75rem;color:#8b949e}
+  .ldot{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+  .svg-wrap{overflow:auto;padding:28px 20px;background:#0d1117}
+  svg text{font-family:'JetBrains Mono',monospace}
+  .preview-section{
+    padding:32px 32px 40px;background:#0d1117;
+    border-top:1px solid #21262d
+  }
+  .preview-title{
+    font-size:.72rem;font-weight:700;color:#8b949e;
+    letter-spacing:.1em;text-transform:uppercase;
+    display:flex;align-items:center;gap:10px;margin-bottom:20px
+  }
+  .preview-title::after{content:'';flex:1;height:1px;background:#21262d}
+  .preview-img{
+    display:block;max-width:100%;border-radius:12px;
+    border:1px solid #30363d;box-shadow:0 8px 32px rgba(0,0,0,.6);
+    cursor:zoom-in;transition:transform .2s
+  }
+  .preview-img:hover{transform:scale(1.01)}
+  .btn-download{
+    display:inline-flex;align-items:center;gap:8px;margin-top:16px;
+    padding:9px 20px;border-radius:8px;font-size:.82rem;font-weight:600;
+    background:linear-gradient(135deg,#1f6feb,#388bfd);color:#fff;
+    text-decoration:none;border:none;cursor:pointer;
+    box-shadow:0 0 14px rgba(56,139,253,.35);transition:all .2s
+  }
+  .btn-download:hover{background:linear-gradient(135deg,#388bfd,#58a6ff);box-shadow:0 0 20px rgba(88,166,255,.45)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hicon">🏥</div>
+  <div>
+    <h1>Modelo Entidad‑Relación — Historia Clínica Distribuida con Citus</h1>
+    <p>Esquema normalizado 1FN · 2FN · 3FN &nbsp;|&nbsp; 7 entidades principales &nbsp;|&nbsp; PostgreSQL + Citus 11.2 &nbsp;|&nbsp; Jaider Reyes Herazo</p>
+  </div>
+</header>
+
+<div class="legend">
+  <div class="li"><div class="ldot" style="background:#1a7f37"></div>Tabla Distribuida — shard key: documento_id</div>
+  <div class="li"><div class="ldot" style="background:#6e40c9"></div>Reference Table — replicada en todos los nodos</div>
+  <div class="li"><div class="ldot" style="background:#9a3412"></div>Tabla Nueva — normalización 1FN</div>
+  <div class="li"><div class="ldot" style="background:#f0a500"></div>PK — Clave Primaria</div>
+  <div class="li"><div class="ldot" style="background:#388bfd"></div>FK — Clave Foránea</div>
+  <div class="li" style="color:#58a6ff">——▶ Relación 1 : N</div>
+</div>
+
+<div class="svg-wrap">
+<svg width="1480" height="1070" viewBox="0 0 1480 1070" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <!-- Arrowhead (many-end) -->
+  <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 L3,5 Z" fill="#58a6ff"/>
+  </marker>
+  <!-- Purple arrowhead for profesional line -->
+  <marker id="arrp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 L3,5 Z" fill="#d2a8ff"/>
+  </marker>
+  <!-- Orange arrowhead for 1FN lines -->
+  <marker id="arro" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 L3,5 Z" fill="#f78166"/>
+  </marker>
+  <!-- Drop shadow -->
+  <filter id="sh" x="-5%" y="-5%" width="115%" height="115%">
+    <feDropShadow dx="3" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.5"/>
+  </filter>
+</defs>
+
+<!-- ================================================================ -->
+<!--  CONNECTION LINES  (drawn first — behind boxes)                  -->
+<!-- ================================================================ -->
+
+<!--  Line 1: USUARIO ——▶ ATENCION  (1:N recibe atención)  -->
+<path d="M 320 292 L 420 292" stroke="#58a6ff" stroke-width="2.5" fill="none" marker-end="url(#arr)"/>
+<!-- Cardinality labels -->
+<text x="332" y="284" fill="#58a6ff" font-size="13" font-weight="700">1</text>
+<text x="400" y="284" fill="#58a6ff" font-size="13" font-weight="700">N</text>
+<!-- Relation label bubble -->
+<rect x="330" y="296" width="88" height="16" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+<text x="374" y="308" text-anchor="middle" fill="#6b8cac" font-size="9">recibe atención</text>
+
+<!--  Line 2: ATENCION ——▶ TECNOLOGIA_SALUD  (1:N tiene tecnología) -->
+<path d="M 700 280 L 760 280 L 760 210 L 830 210" stroke="#58a6ff" stroke-width="2.5" fill="none" marker-end="url(#arr)"/>
+<text x="705" y="272" fill="#58a6ff" font-size="13" font-weight="700">1</text>
+<text x="815" y="202" fill="#58a6ff" font-size="13" font-weight="700">N</text>
+<rect x="712" y="254" width="80" height="16" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+<text x="752" y="266" text-anchor="middle" fill="#6b8cac" font-size="9">prescribe</text>
+
+<!--  Line 3: PROFESIONAL_SALUD ——▶ TECNOLOGIA_SALUD  (1:N) -->
+<path d="M 1180 122 L 1145 122 L 1145 210 L 1110 210" stroke="#d2a8ff" stroke-width="2" fill="none" stroke-dasharray="7,3" marker-end="url(#arrp)"/>
+<text x="1162" y="114" fill="#d2a8ff" font-size="13" font-weight="700">1</text>
+<text x="1118" y="202" fill="#d2a8ff" font-size="13" font-weight="700">N</text>
+<rect x="1115" y="148" width="58" height="16" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+<text x="1144" y="160" text-anchor="middle" fill="#8b7bac" font-size="9">prescribe</text>
+
+<!--  Line 4: ATENCION ——▶ DIAGNOSTICO  (1:N origina diagnóstico) -->
+<path d="M 560 390 L 560 480" stroke="#58a6ff" stroke-width="2.5" fill="none" marker-end="url(#arr)"/>
+<text x="568" y="408" fill="#58a6ff" font-size="13" font-weight="700">1</text>
+<text x="568" y="475" fill="#58a6ff" font-size="13" font-weight="700">N</text>
+<rect x="568" y="426" width="56" height="16" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+<text x="596" y="438" text-anchor="middle" fill="#6b8cac" font-size="9">origina</text>
+
+<!--  Line 5: ATENCION ——▶ EGRESO  (1:N, bypass izquierdo) -->
+<path d="M 420 300 L 380 300 L 380 900 L 420 900" stroke="#58a6ff" stroke-width="2.5" fill="none" marker-end="url(#arr)"/>
+<text x="388" y="288" fill="#58a6ff" font-size="13" font-weight="700">1</text>
+<text x="425" y="915" fill="#58a6ff" font-size="13" font-weight="700">N</text>
+<rect x="305" y="594" width="68" height="16" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+<text x="339" y="606" text-anchor="middle" fill="#6b8cac" font-size="9">concluye en</text>
+
+<!--  Line 6: DIAGNOSTICO ——▶ DIAGNOSTICO_RELACIONADO  (1:N — 1FN) -->
+<path d="M 700 572 L 830 572" stroke="#f78166" stroke-width="2.5" fill="none" marker-end="url(#arro)"/>
+<text x="706" y="564" fill="#f78166" font-size="13" font-weight="700">1</text>
+<text x="815" y="564" fill="#f78166" font-size="13" font-weight="700">N</text>
+<rect x="718" y="576" width="84" height="16" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+<text x="760" y="588" text-anchor="middle" fill="#a66b56" font-size="9">comorbilidad</text>
+
+<!--  Line 7: USUARIO ——▶ TABLAS NUEVAS  (1:N — 1FN) -->
+<path d="M 180 414 L 180 490" stroke="#f78166" stroke-width="2" fill="none" stroke-dasharray="6,3" marker-end="url(#arro)"/>
+<text x="188" y="428" fill="#f78166" font-size="13" font-weight="700">1</text>
+<text x="188" y="483" fill="#f78166" font-size="13" font-weight="700">N</text>
+
+<!-- ================================================================ -->
+<!--  ENTITY BOXES                                                      -->
+<!-- ================================================================ -->
+
+<!-- ╔══════════════════════════════╗  USUARIO  -->
+<g id="e-usuario" filter="url(#sh)">
+  <rect x="40" y="170" width="280" height="244" rx="10" fill="#161b22" stroke="#1a7f37" stroke-width="2.5"/>
+  <!-- Header -->
+  <rect x="40" y="170" width="280" height="40" rx="10" fill="#1a7f37"/>
+  <rect x="40" y="194" width="280" height="16" fill="#1a7f37"/>
+  <text x="90" y="196" fill="#fff" font-size="15" font-weight="700">👤 USUARIO</text>
+  <text x="312" y="192" text-anchor="end" fill="#7ee787" font-size="9" font-weight="700">DISTRIBUTED</text>
+  <line x1="40" y1="210" x2="320" y2="210" stroke="#21262d" stroke-width="1"/>
+  <!-- Row: documento_id PK SHARD -->
+  <rect x="40" y="210" width="280" height="28" fill="#1b2e1f"/>
+  <rect x="40" y="210" width="4" height="28" fill="#f0a500" rx="2"/>
+  <text x="52" y="228" fill="#f0a500" font-size="10" font-weight="700">PK</text>
+  <text x="72" y="228" fill="#e6edf3" font-size="12">documento_id</text>
+  <text x="312" y="228" text-anchor="end" fill="#3fb950" font-size="10">BIGINT 🔑shard</text>
+  <!-- Row: nombre_completo -->
+  <rect x="40" y="238" width="280" height="28" fill="#161b22"/>
+  <text x="52" y="256" fill="#e6edf3" font-size="12">nombre_completo</text>
+  <text x="312" y="256" text-anchor="end" fill="#6b8cac" font-size="10">VARCHAR</text>
+  <!-- Row: fecha_nacimiento -->
+  <rect x="40" y="266" width="280" height="28" fill="#1c2128"/>
+  <text x="52" y="284" fill="#e6edf3" font-size="12">fecha_nacimiento</text>
+  <text x="312" y="284" text-anchor="end" fill="#6b8cac" font-size="10">DATE</text>
+  <!-- Row: voluntad_anticipada -->
+  <rect x="40" y="294" width="280" height="28" fill="#161b22"/>
+  <text x="52" y="312" fill="#e6edf3" font-size="12">voluntad_anticipada</text>
+  <text x="312" y="312" text-anchor="end" fill="#6b8cac" font-size="10">BOOLEAN</text>
+  <!-- Row: ocupacion -->
+  <rect x="40" y="322" width="280" height="28" fill="#1c2128"/>
+  <text x="52" y="340" fill="#e6edf3" font-size="12">ocupacion</text>
+  <text x="312" y="340" text-anchor="end" fill="#6b8cac" font-size="10">VARCHAR</text>
+  <!-- Separator -->
+  <line x1="40" y1="350" x2="320" y2="350" stroke="#30363d" stroke-width="1" stroke-dasharray="5,4"/>
+  <!-- Row: FK cats compact -->
+  <rect x="40" y="350" width="280" height="28" fill="#161b22"/>
+  <rect x="40" y="350" width="4" height="28" fill="#388bfd" rx="2"/>
+  <text x="52" y="364" fill="#388bfd" font-size="9" font-weight="700">FK×9</text>
+  <text x="76" y="364" fill="#4a7abf" font-size="10">→ catálogos (pais, sexo, genero,</text>
+  <text x="76" y="378" fill="#4a7abf" font-size="10">   etnia, municipio, zona, discap…)</text>
+  <!-- Note: edad en vista -->
+  <rect x="40" y="398" width="280" height="16" fill="#161b22" rx="0"/>
+  <text x="160" y="410" text-anchor="middle" fill="#3d444d" font-size="9">🔍 edad calculada en la vista v_usuario</text>
+</g>
+
+<!-- ╔══════════════════════════════╗  ATENCION  -->
+<g id="e-atencion" filter="url(#sh)">
+  <rect x="420" y="170" width="280" height="220" rx="10" fill="#161b22" stroke="#1a7f37" stroke-width="2.5"/>
+  <rect x="420" y="170" width="280" height="40" rx="10" fill="#1a7f37"/>
+  <rect x="420" y="194" width="280" height="16" fill="#1a7f37"/>
+  <text x="472" y="197" fill="#fff" font-size="15" font-weight="700">🏥 ATENCIÓN</text>
+  <text x="692" y="192" text-anchor="end" fill="#7ee787" font-size="9" font-weight="700">DISTRIBUTED</text>
+  <line x1="420" y1="210" x2="700" y2="210" stroke="#21262d" stroke-width="1"/>
+  <!-- atencion_id PK -->
+  <rect x="420" y="210" width="280" height="28" fill="#1b2e1f"/>
+  <rect x="420" y="210" width="4" height="28" fill="#f0a500" rx="2"/>
+  <text x="432" y="228" fill="#f0a500" font-size="10" font-weight="700">PK</text>
+  <text x="452" y="228" fill="#e6edf3" font-size="12">atencion_id</text>
+  <text x="692" y="228" text-anchor="end" fill="#6b8cac" font-size="10">BIGSERIAL</text>
+  <!-- documento_id FK -->
+  <rect x="420" y="238" width="280" height="28" fill="#161b22"/>
+  <rect x="420" y="238" width="4" height="28" fill="#388bfd" rx="2"/>
+  <text x="432" y="256" fill="#388bfd" font-size="10" font-weight="700">FK</text>
+  <text x="452" y="256" fill="#e6edf3" font-size="12">documento_id</text>
+  <text x="692" y="256" text-anchor="end" fill="#3fb950" font-size="10">BIGINT 🔑</text>
+  <!-- entidad_salud -->
+  <rect x="420" y="266" width="280" height="28" fill="#1c2128"/>
+  <text x="432" y="284" fill="#e6edf3" font-size="12">entidad_salud</text>
+  <text x="692" y="284" text-anchor="end" fill="#6b8cac" font-size="10">VARCHAR</text>
+  <!-- fecha_ingreso -->
+  <rect x="420" y="294" width="280" height="28" fill="#161b22"/>
+  <text x="432" y="312" fill="#e6edf3" font-size="12">fecha_ingreso</text>
+  <text x="692" y="312" text-anchor="end" fill="#6b8cac" font-size="10">TIMESTAMP</text>
+  <!-- causa_atencion -->
+  <rect x="420" y="322" width="280" height="28" fill="#1c2128"/>
+  <text x="432" y="340" fill="#e6edf3" font-size="12">causa_atencion</text>
+  <text x="692" y="340" text-anchor="end" fill="#6b8cac" font-size="10">TEXT</text>
+  <!-- Separator -->
+  <line x1="420" y1="350" x2="700" y2="350" stroke="#30363d" stroke-width="1" stroke-dasharray="5,4"/>
+  <!-- FK cats compact -->
+  <rect x="420" y="350" width="280" height="28" fill="#161b22"/>
+  <rect x="420" y="350" width="4" height="28" fill="#388bfd" rx="2"/>
+  <text x="432" y="364" fill="#388bfd" font-size="9" font-weight="700">FK×4</text>
+  <text x="456" y="364" fill="#4a7abf" font-size="10">→ modalidad, entorno, via_ingreso,</text>
+  <text x="456" y="378" fill="#4a7abf" font-size="10">   clasificacion_triage</text>
+</g>
+
+<!-- ╔══════════════════════════════╗  TECNOLOGIA_SALUD  -->
+<g id="e-tecnologia" filter="url(#sh)">
+  <rect x="830" y="60" width="280" height="296" rx="10" fill="#161b22" stroke="#1a7f37" stroke-width="2.5"/>
+  <rect x="830" y="60" width="280" height="40" rx="10" fill="#1a7f37"/>
+  <rect x="830" y="84" width="280" height="16" fill="#1a7f37"/>
+  <text x="840" y="86" fill="#fff" font-size="12.5" font-weight="700">💊 TECNOLOGÍA_SALUD</text>
+  <text x="1102" y="82" text-anchor="end" fill="#7ee787" font-size="9" font-weight="700">DISTRIBUTED</text>
+  <line x1="830" y1="100" x2="1110" y2="100" stroke="#21262d" stroke-width="1"/>
+  <!-- tecnologia_id PK -->
+  <rect x="830" y="100" width="280" height="28" fill="#1b2e1f"/>
+  <rect x="830" y="100" width="4" height="28" fill="#f0a500" rx="2"/>
+  <text x="842" y="118" fill="#f0a500" font-size="10" font-weight="700">PK</text>
+  <text x="862" y="118" fill="#e6edf3" font-size="12">tecnologia_id</text>
+  <text x="1102" y="118" text-anchor="end" fill="#6b8cac" font-size="10">UUID</text>
+  <!-- documento_id FK -->
+  <rect x="830" y="128" width="280" height="28" fill="#161b22"/>
+  <rect x="830" y="128" width="4" height="28" fill="#388bfd" rx="2"/>
+  <text x="842" y="146" fill="#388bfd" font-size="10" font-weight="700">FK</text>
+  <text x="862" y="146" fill="#e6edf3" font-size="12">documento_id</text>
+  <text x="1102" y="146" text-anchor="end" fill="#3fb950" font-size="10">BIGINT 🔑</text>
+  <!-- atencion_id FK -->
+  <rect x="830" y="156" width="280" height="28" fill="#1c2128"/>
+  <rect x="830" y="156" width="4" height="28" fill="#388bfd" rx="2"/>
+  <text x="842" y="174" fill="#388bfd" font-size="10" font-weight="700">FK</text>
+  <text x="862" y="174" fill="#e6edf3" font-size="12">atencion_id</text>
+  <text x="1102" y="174" text-anchor="end" fill="#6b8cac" font-size="10">BIGINT</text>
+  <!-- descripcion_medicamento -->
+  <rect x="830" y="184" width="280" height="28" fill="#161b22"/>
+  <text x="842" y="202" fill="#e6edf3" font-size="12">descripcion_medicamento</text>
+  <text x="1102" y="202" text-anchor="end" fill="#6b8cac" font-size="10">VARCHAR</text>
+  <!-- dosis / frecuencia -->
+  <rect x="830" y="212" width="280" height="28" fill="#1c2128"/>
+  <text x="842" y="230" fill="#e6edf3" font-size="12">dosis / frecuencia</text>
+  <text x="1102" y="230" text-anchor="end" fill="#6b8cac" font-size="10">VARCHAR</text>
+  <!-- dias_tratamiento -->
+  <rect x="830" y="240" width="280" height="28" fill="#161b22"/>
+  <text x="842" y="258" fill="#e6edf3" font-size="12">dias_tratamiento</text>
+  <text x="1102" y="258" text-anchor="end" fill="#6b8cac" font-size="10">INT</text>
+  <!-- id_personal_salud FK -->
+  <rect x="830" y="268" width="280" height="28" fill="#1c2128"/>
+  <rect x="830" y="268" width="4" height="28" fill="#6e40c9" rx="2"/>
+  <text x="842" y="286" fill="#6e40c9" font-size="10" font-weight="700">FK</text>
+  <text x="862" y="286" fill="#e6edf3" font-size="12">id_personal_salud</text>
+  <text x="1102" y="286" text-anchor="end" fill="#6b8cac" font-size="10">UUID</text>
+  <!-- Separator -->
+  <line x1="830" y1="296" x2="1110" y2="296" stroke="#30363d" stroke-width="1" stroke-dasharray="5,4"/>
+  <!-- FK cats compact -->
+  <rect x="830" y="296" width="280" height="28" fill="#161b22"/>
+  <rect x="830" y="296" width="4" height="28" fill="#388bfd" rx="2"/>
+  <text x="842" y="310" fill="#388bfd" font-size="9" font-weight="700">FK×2</text>
+  <text x="866" y="310" fill="#4a7abf" font-size="10">→ via_administracion,</text>
+  <text x="866" y="324" fill="#4a7abf" font-size="10">   finalidad_tecnologia</text>
+</g>
+
+<!-- ╔══════════════════════════════╗  PROFESIONAL_SALUD (reference) -->
+<g id="e-profesional" filter="url(#sh)">
+  <rect x="1180" y="60" width="270" height="130" rx="10" fill="#161b22" stroke="#6e40c9" stroke-width="2.5"/>
+  <rect x="1180" y="60" width="270" height="40" rx="10" fill="#6e40c9"/>
+  <rect x="1180" y="84" width="270" height="16" fill="#6e40c9"/>
+  <text x="1192" y="87" fill="#fff" font-size="12" font-weight="700">👨‍⚕️ PROFESIONAL_SALUD</text>
+  <text x="1442" y="82" text-anchor="end" fill="#d2a8ff" font-size="9" font-weight="700">REFERENCE</text>
+  <line x1="1180" y1="100" x2="1450" y2="100" stroke="#21262d" stroke-width="1"/>
+  <!-- id_personal_salud PK -->
+  <rect x="1180" y="100" width="270" height="28" fill="#1b1730"/>
+  <rect x="1180" y="100" width="4" height="28" fill="#f0a500" rx="2"/>
+  <text x="1192" y="118" fill="#f0a500" font-size="10" font-weight="700">PK</text>
+  <text x="1212" y="118" fill="#e6edf3" font-size="12">id_personal_salud</text>
+  <text x="1442" y="118" text-anchor="end" fill="#6b8cac" font-size="10">UUID</text>
+  <!-- nombre -->
+  <rect x="1180" y="128" width="270" height="28" fill="#161b22"/>
+  <text x="1192" y="146" fill="#e6edf3" font-size="12">nombre</text>
+  <text x="1442" y="146" text-anchor="end" fill="#6b8cac" font-size="10">VARCHAR</text>
+  <!-- especialidad -->
+  <rect x="1180" y="156" width="270" height="28" fill="#1c2128"/>
+  <text x="1192" y="174" fill="#e6edf3" font-size="12">especialidad</text>
+  <text x="1442" y="174" text-anchor="end" fill="#6b8cac" font-size="10">VARCHAR</text>
+</g>
+
+<!-- ╔══════════════════════════════╗  DIAGNOSTICO -->
+<g id="e-diagnostico" filter="url(#sh)">
+  <rect x="420" y="480" width="280" height="200" rx="10" fill="#161b22" stroke="#1a7f37" stroke-width="2.5"/>
+  <rect x="420" y="480" width="280" height="40" rx="10" fill="#1a7f37"/>
+  <rect x="420" y="504" width="280" height="16" fill="#1a7f37"/>
+  <text x="468" y="507" fill="#fff" font-size="15" font-weight="700">🩺 DIAGNÓSTICO</text>
+  <text x="692" y="502" text-anchor="end" fill="#7ee787" font-size="9" font-weight="700">DISTRIBUTED</text>
+  <line x1="420" y1="520" x2="700" y2="520" stroke="#21262d" stroke-width="1"/>
+  <!-- diagnostico_id PK -->
+  <rect x="420" y="520" width="280" height="28" fill="#1b2e1f"/>
+  <rect x="420" y="520" width="4" height="28" fill="#f0a500" rx="2"/>
+  <text x="432" y="538" fill="#f0a500" font-size="10" font-weight="700">PK</text>
+  <text x="452" y="538" fill="#e6edf3" font-size="12">diagnostico_id</text>
+  <text x="692" y="538" text-anchor="end" fill="#6b8cac" font-size="10">BIGSERIAL</text>
+  <!-- documento_id FK -->
+  <rect x="420" y="548" width="280" height="28" fill="#161b22"/>
+  <rect x="420" y="548" width="4" height="28" fill="#388bfd" rx="2"/>
+  <text x="432" y="566" fill="#388bfd" font-size="10" font-weight="700">FK</text>
+  <text x="452" y="566" fill="#e6edf3" font-size="12">documento_id</text>
+  <text x="692" y="566" text-anchor="end" fill="#3fb950" font-size="10">BIGINT 🔑</text>
+  <!-- atencion_id FK -->
+  <rect x="420" y="576" width="280" height="28" fill="#1c2128"/>
+  <rect x="420" y="576" width="4" height="28" fill="#388bfd" rx="2"/>
+  <text x="432" y="594" fill="#388bfd" font-size="10" font-weight="700">FK</text>
+  <text x="452" y="594" fill="#e6edf3" font-size="12">atencion_id</text>
+  <text x="692" y="594" text-anchor="end" fill="#6b8cac" font-size="10">BIGINT</text>
+  <!-- diagnostico_ingreso -->
+  <rect x="420" y="604" width="280" height="28" fill="#161b22"/>
+  <text x="432" y="622" fill="#e6edf3" font-size="12">diagnostico_ingreso</text>
+  <text x="692" y="622" text-anchor="end" fill="#6b8cac" font-size="10">VARCHAR</text>
+  <!-- diagnostico_egreso -->
+  <rect x="420" y="632" width="280" height="28" fill="#1c2128"/>
+  <text x="432" y="650" fill="#e6edf3" font-size="12">diagnostico_egreso</text>
+  <text x="692" y="650" text-anchor="end" fill="#6b8cac" font-size="10">VARCHAR</text>
+  <!-- Separator + FK cats -->
+  <line x1="420" y1="660" x2="700" y2="660" stroke="#30363d" stroke-width="1" stroke-dasharray="5,4"/>
+  <rect x="420" y="660" width="280" height="20" fill="#161b22" rx="0"/>
+  <rect x="420" y="660" width="4" height="20" fill="#388bfd" rx="2"/>
+  <text x="432" y="674" fill="#388bfd" font-size="9" font-weight="700">FK×2</text>
+  <text x="456" y="674" fill="#4a7abf" font-size="9">→ cat_tipo_diagnostico (ingreso/egreso)</text>
+</g>
+
+<!-- ╔══════════════════════════════╗  DIAGNOSTICO_RELACIONADO (NEW 1FN) -->
+<g id="e-diagrel" filter="url(#sh)">
+  <rect x="830" y="480" width="280" height="184" rx="10" fill="#161b22" stroke="#f78166" stroke-width="2.5"/>
+  <rect x="830" y="480" width="280" height="40" rx="10" fill="#8f3312"/>
+  <rect x="830" y="504" width="280" height="16" fill="#8f3312"/>
+  <text x="842" y="505" fill="#fff" font-size="11.5" font-weight="700">🆕 DIAG_RELACIONADO</text>
+  <text x="1102" y="501" text-anchor="end" fill="#ffa657" font-size="9" font-weight="700">1FN FIX</text>
+  <!-- Nota 1FN -->
+  <text x="842" y="518" fill="#f78166" font-size="9">Reemplaza diagnostico_rel1/2/3</text>
+  <line x1="830" y1="520" x2="1110" y2="520" stroke="#21262d" stroke-width="1"/>
+  <!-- rel_id PK -->
+  <rect x="830" y="520" width="280" height="28" fill="#2a1810"/>
+  <rect x="830" y="520" width="4" height="28" fill="#f0a500" rx="2"/>
+  <text x="842" y="538" fill="#f0a500" font-size="10" font-weight="700">PK</text>
+  <text x="862" y="538" fill="#e6edf3" font-size="12">rel_id</text>
+  <text x="1102" y="538" text-anchor="end" fill="#6b8cac" font-size="10">BIGSERIAL</text>
+  <!-- documento_id FK -->
+  <rect x="830" y="548" width="280" height="28" fill="#1c1814"/>
+  <rect x="830" y="548" width="4" height="28" fill="#388bfd" rx="2"/>
+  <text x="842" y="566" fill="#388bfd" font-size="10" font-weight="700">FK</text>
+  <text x="862" y="566" fill="#e6edf3" font-size="12">documento_id</text>
+  <text x="1102" y="566" text-anchor="end" fill="#3fb950" font-size="10">BIGINT 🔑</text>
+  <!-- diagnostico_id FK -->
+  <rect x="830" y="576" width="280" height="28" fill="#241410"/>
+  <rect x="830" y="576" width="4" height="28" fill="#388bfd" rx="2"/>
+  <text x="842" y="594" fill="#388bfd" font-size="10" font-weight="700">FK</text>
+  <text x="862" y="594" fill="#e6edf3" font-size="12">diagnostico_id</text>
+  <text x="1102" y="594" text-anchor="end" fill="#6b8cac" font-size="10">BIGINT</text>
+  <!-- codigo_cie10 -->
+  <rect x="830" y="604" width="280" height="28" fill="#1c1814"/>
+  <text x="842" y="622" fill="#e6edf3" font-size="12">codigo_cie10</text>
+  <text x="1102" y="622" text-anchor="end" fill="#6b8cac" font-size="10">VARCHAR</text>
+  <!-- descripcion -->
+  <rect x="830" y="632" width="280" height="28" fill="#241410"/>
+  <text x="842" y="650" fill="#e6edf3" font-size="12">descripcion</text>
+  <text x="1102" y="650" text-anchor="end" fill="#6b8cac" font-size="10">VARCHAR</text>
+</g>
+
+<!-- ╔══════════════════════════════╗  EGRESO -->
+<g id="e-egreso" filter="url(#sh)">
+  <rect x="420" y="750" width="280" height="282" rx="10" fill="#161b22" stroke="#1a7f37" stroke-width="2.5"/>
+  <rect x="420" y="750" width="280" height="40" rx="10" fill="#1a7f37"/>
+  <rect x="420" y="774" width="280" height="16" fill="#1a7f37"/>
+  <text x="476" y="777" fill="#fff" font-size="15" font-weight="700">🚪 EGRESO</text>
+  <text x="692" y="772" text-anchor="end" fill="#7ee787" font-size="9" font-weight="700">DISTRIBUTED</text>
+  <line x1="420" y1="790" x2="700" y2="790" stroke="#21262d" stroke-width="1"/>
+  <!-- egreso_id PK -->
+  <rect x="420" y="790" width="280" height="28" fill="#1b2e1f"/>
+  <rect x="420" y="790" width="4" height="28" fill="#f0a500" rx="2"/>
+  <text x="432" y="808" fill="#f0a500" font-size="10" font-weight="700">PK</text>
+  <text x="452" y="808" fill="#e6edf3" font-size="12">egreso_id</text>
+  <text x="692" y="808" text-anchor="end" fill="#6b8cac" font-size="10">BIGSERIAL</text>
+  <!-- documento_id FK -->
+  <rect x="420" y="818" width="280" height="28" fill="#161b22"/>
+  <rect x="420" y="818" width="4" height="28" fill="#388bfd" rx="2"/>
+  <text x="432" y="836" fill="#388bfd" font-size="10" font-weight="700">FK</text>
+  <text x="452" y="836" fill="#e6edf3" font-size="12">documento_id</text>
+  <text x="692" y="836" text-anchor="end" fill="#3fb950" font-size="10">BIGINT 🔑</text>
+  <!-- atencion_id FK -->
+  <rect x="420" y="846" width="280" height="28" fill="#1c2128"/>
+  <rect x="420" y="846" width="4" height="28" fill="#388bfd" rx="2"/>
+  <text x="432" y="864" fill="#388bfd" font-size="10" font-weight="700">FK</text>
+  <text x="452" y="864" fill="#e6edf3" font-size="12">atencion_id</text>
+  <text x="692" y="864" text-anchor="end" fill="#6b8cac" font-size="10">BIGINT</text>
+  <!-- fecha_salida -->
+  <rect x="420" y="874" width="280" height="28" fill="#161b22"/>
+  <text x="432" y="892" fill="#e6edf3" font-size="12">fecha_salida</text>
+  <text x="692" y="892" text-anchor="end" fill="#6b8cac" font-size="10">TIMESTAMP</text>
+  <!-- diagnostico_muerte -->
+  <rect x="420" y="902" width="280" height="28" fill="#1c2128"/>
+  <text x="432" y="920" fill="#e6edf3" font-size="12">diagnostico_muerte</text>
+  <text x="692" y="920" text-anchor="end" fill="#6b8cac" font-size="10">VARCHAR</text>
+  <!-- codigo_prestador -->
+  <rect x="420" y="930" width="280" height="28" fill="#161b22"/>
+  <text x="432" y="948" fill="#e6edf3" font-size="12">codigo_prestador</text>
+  <text x="692" y="948" text-anchor="end" fill="#6b8cac" font-size="10">VARCHAR</text>
+  <!-- dias_incapacidad -->
+  <rect x="420" y="958" width="280" height="28" fill="#1c2128"/>
+  <text x="432" y="976" fill="#e6edf3" font-size="12">dias_incapacidad / maternidad</text>
+  <text x="692" y="976" text-anchor="end" fill="#6b8cac" font-size="10">INT</text>
+  <!-- responsable_egreso -->
+  <rect x="420" y="986" width="280" height="28" fill="#161b22"/>
+  <text x="432" y="1004" fill="#e6edf3" font-size="12">responsable_egreso</text>
+  <text x="692" y="1004" text-anchor="end" fill="#6b8cac" font-size="10">VARCHAR</text>
+  <!-- Separator + FK cats -->
+  <line x1="420" y1="1014" x2="700" y2="1014" stroke="#30363d" stroke-width="1" stroke-dasharray="5,4"/>
+  <rect x="420" y="1014" width="280" height="18" fill="#161b22" rx="0"/>
+  <rect x="420" y="1014" width="4" height="18" fill="#388bfd" rx="2"/>
+  <text x="432" y="1026" fill="#388bfd" font-size="9" font-weight="700">FK×2</text>
+  <text x="456" y="1026" fill="#4a7abf" font-size="9">→ condicion_salida, tipo_incapacidad</text>
+</g>
+
+<!-- ╔══════════════════════════════╗  TABLAS NUEVAS — 1FN GRUPO -->
+<g id="e-newtables" filter="url(#sh)">
+  <rect x="40" y="490" width="280" height="190" rx="10" fill="#161b22" stroke="#f78166" stroke-width="2" stroke-dasharray="8,4"/>
+  <rect x="40" y="490" width="280" height="40" rx="10" fill="#6b2010"/>
+  <rect x="40" y="514" width="280" height="16" fill="#6b2010"/>
+  <text x="52" y="512" fill="#fff" font-size="11" font-weight="700">🆕 TABLAS NUEVAS — 1FN</text>
+  <text x="312" y="509" text-anchor="end" fill="#ffa657" font-size="9">3 tablas</text>
+  <line x1="40" y1="530" x2="320" y2="530" stroke="#30363d" stroke-width="1"/>
+  <!-- alergia -->
+  <text x="52" y="550" fill="#ffa657" font-size="11" font-weight="700">■ alergia</text>
+  <text x="52" y="564" fill="#6b5240" font-size="10">  alergia_id PK · documento_id FK · descripcion</text>
+  <line x1="52" y1="572" x2="300" y2="572" stroke="#30363d" stroke-width="1"/>
+  <!-- antecedente -->
+  <text x="52" y="590" fill="#ffa657" font-size="11" font-weight="700">■ antecedente_familiar_paciente</text>
+  <text x="52" y="604" fill="#6b5240" font-size="10">  antecedente_id PK · documento_id FK · descr.</text>
+  <line x1="52" y1="612" x2="300" y2="612" stroke="#30363d" stroke-width="1"/>
+  <!-- riesgo -->
+  <text x="52" y="630" fill="#ffa657" font-size="11" font-weight="700">■ riesgo_ocupacional</text>
+  <text x="52" y="644" fill="#6b5240" font-size="10">  riesgo_id PK · documento_id FK · descripcion</text>
+  <line x1="52" y1="652" x2="300" y2="652" stroke="#30363d" stroke-width="1"/>
+  <!-- note -->
+  <text x="180" y="672" text-anchor="middle" fill="#4d3020" font-size="9">Antes eran campos TEXT en egreso (violación 1FN)</text>
+</g>
+
+<!-- ================================================================ -->
+<!-- CATÁLOGOS INFO BOX (top-left corner)                             -->
+<!-- ================================================================ -->
+<rect x="40" y="30" width="280" height="100" rx="10" fill="#0f1620" stroke="#1f6feb" stroke-width="1.5" stroke-dasharray="6,3"/>
+<text x="180" y="52" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="700">🗂️ 17 TABLAS DE CATÁLOGO</text>
+<text x="180" y="68" text-anchor="middle" fill="#4a7abf" font-size="10">create_reference_table() → replicadas</text>
+<text x="180" y="84" text-anchor="middle" fill="#4a7abf" font-size="10">cat_pais · cat_municipio · cat_etnia</text>
+<text x="180" y="100" text-anchor="middle" fill="#4a7abf" font-size="10">cat_sexo · cat_genero · cat_triage · ...</text>
+<text x="180" y="116" text-anchor="middle" fill="#2d4a6b" font-size="9">Referenciadas vía FK desde usuario, atencion,</text>
+<text x="180" y="128" text-anchor="middle" fill="#2d4a6b" font-size="9">tecnologia_salud, diagnostico y egreso</text>
+
+<!-- ================================================================ -->
+<!-- Nota explicativa de co-location                                  -->
+<!-- ================================================================ -->
+<rect x="830" y="700" width="560" height="70" rx="10" fill="#0f1a0f" stroke="#1a7f37" stroke-width="1.5" stroke-dasharray="6,3"/>
+<text x="1110" y="723" text-anchor="middle" fill="#3fb950" font-size="11" font-weight="700">🔑 Co-location Citus: todas las tablas distribuidas</text>
+<text x="1110" y="740" text-anchor="middle" fill="#2a5e2a" font-size="10">usan documento_id como shard key → los datos de un mismo</text>
+<text x="1110" y="756" text-anchor="middle" fill="#2a5e2a" font-size="10">paciente siempre residen en el mismo nodo worker</text>
+
+</svg>
+</div>
+
+<div class="preview-section">
+  <div class="preview-title">Captura Estática Integrada</div>
+  <a href="erd_preview.png" target="_blank" title="Abrir imagen completa">
+    <img src="erd_preview.png" alt="ERD Preview" class="preview-img">
+  </a>
+  <a href="erd_preview.png" download class="btn-download">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M7.25 10.75V2.5h1.5v8.25h2.5L8 14.5l-3.25-3.5h2.5z"/>
+      <path d="M14 14.5v1.5H2v-1.5h12z"/>
+    </svg>
+    Descargar PNG Alta Resolución
+  </a>
+</div>
+
+</body>
+</html>
