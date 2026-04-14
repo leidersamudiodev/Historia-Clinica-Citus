@@ -1,7 +1,7 @@
 -- =============================================================
 -- HISTORIA CLÍNICA DISTRIBUIDA CON POSTGRESQL + CITUS
 -- Esquema Normalizado — 1FN, 2FN, 3FN
--- Autor: Leider Samudio && Jose Sierra
+-- Autor: Leider Samudio && Jose Sierra.
 -- =============================================================
 -- REGLAS CITUS aplicadas:
 --   1. Las reference tables pueden referenciar a otras reference tables (OK)
